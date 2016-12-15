@@ -41,9 +41,9 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.internal.DoubleInetAddressDns;
-import okhttp3.internal.ConnectionRecorder;
 import okhttp3.internal.RecordingOkAuthenticator;
 import okhttp3.internal.SingleInetAddressDns;
+import okhttp3.internal.SocketRecorder;
 import okhttp3.internal.Util;
 import okhttp3.internal.connection.RealConnection;
 import okhttp3.internal.tls.SslClient;
@@ -768,10 +768,10 @@ public final class HttpOverHttp2Test {
   @Test public void noDataFramesTransmittedOnNullRequestBody() throws Exception {
     server.enqueue(new MockResponse()
         .setBody("ABC"));
-
-    ConnectionRecorder connectionRecorder =
-        new ConnectionRecorder(client, server, sslClient.socketFactory);
-    client = connectionRecorder.newClient();
+    SocketRecorder socketRecorder = new SocketRecorder();
+    client = client.newBuilder()
+        .sslSocketFactory(socketRecorder.sslSocketFactory(sslClient.socketFactory))
+        .build();
 
     Call call = client.newCall(new Request.Builder()
         .url(server.url("/"))
@@ -781,10 +781,9 @@ public final class HttpOverHttp2Test {
     assertEquals("ABC", response.body().string());
 
     // Replay the bytes sent from the client to ensure no data frames were sent.
-    ConnectionRecorder.Conversation conversation = connectionRecorder.takeConversation();
-    connectionRecorder.shutdown();
+    SocketRecorder.Conversation conversation = socketRecorder.takeConversation();
 
-    ByteString bytesFromClient = conversation.bytesFromClient();
+    ByteString bytesFromClient = conversation.bytesSentFromClient();
     Buffer buffer = new Buffer();
     buffer.write(bytesFromClient);
 
